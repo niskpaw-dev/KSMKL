@@ -317,6 +317,26 @@
   .form-err.show{ display:flex; }
   .form-err svg{ width:17px; height:17px; flex:none; }
 
+  /* ---------- Honeypot (tersembunyi dari manusia) ---------- */
+  .hp{ position:absolute !important; left:-9999px !important; top:auto;
+    width:1px; height:1px; overflow:hidden; }
+
+  /* ---------- Spinner butang ---------- */
+  .spin{ width:16px; height:16px; border-radius:50%; display:inline-block;
+    border:2px solid rgba(246,242,230,0.35); border-top-color:#F6F2E6;
+    animation:spin .7s linear infinite; vertical-align:-3px; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  @media (prefers-reduced-motion:reduce){ .spin{ animation-duration:1.4s; } }
+
+  /* ---------- Chip No. Rujukan ---------- */
+  .ref{ margin:18px auto 0; max-width:340px; border:1px solid var(--garis-emas);
+    border-radius:var(--r); background:linear-gradient(180deg, var(--emas-tint), transparent);
+    padding:16px 18px; }
+  .ref-lbl{ font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--emas-deep); font-weight:600; }
+  .ref-id{ font-family:"Cormorant Garamond",serif; font-weight:700; font-size:30px;
+    color:var(--marun); letter-spacing:.04em; margin-top:4px; }
+  .ref-note{ font-size:12px; color:var(--dakwat-soft); margin-top:6px; }
+
   /* ---------- Skrin semak & sahkan ---------- */
   .review{ display:none; animation:rise .35s var(--ease) both; }
   .review.show{ display:block; }
@@ -383,6 +403,11 @@
         </div>
       </div>
       <div class="panel">
+        <!-- honeypot: manusia tidak nampak/isi; bot selalunya isi -->
+        <div class="hp" aria-hidden="true">
+          <label for="hp_field">Jangan isi ruangan ini</label>
+          <input type="text" id="hp_field" tabindex="-1" autocomplete="off">
+        </div>
         <div class="grid">
           <div class="field full">
             <label for="namaPasukan">Nama pasukan / persatuan / sekolah</label>
@@ -586,6 +611,10 @@
     </section>
 
     <div class="submit-wrap">
+      <div class="form-err" id="reviewErr" style="margin-bottom:14px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01" stroke-linecap="round"/></svg>
+        <span id="reviewErrMsg">Penghantaran gagal.</span>
+      </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap">
         <button type="button" class="btn btn-ghost" id="btnBack">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19 12H5M11 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -608,6 +637,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9.5"/><path d="m7.5 12.3 3 3 6-6.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
     <h2>Pendaftaran Diterima</h2>
+    <div class="ref" id="refWrap" hidden>
+      <div class="ref-lbl">No. Rujukan Pendaftaran</div>
+      <div class="ref-id" id="refId">&mdash;</div>
+      <div class="ref-note">Simpan nombor ini &middot; sertakan bersama slip bayaran kepada bendahari</div>
+    </div>
     <p id="doneMsg"></p>
     <div style="margin-top:22px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap">
       <button type="button" class="btn btn-gold" id="btnNew">Daftar pasukan lain</button>
@@ -655,49 +689,28 @@
   </footer>
 </div>
 
+<!-- Sumber tunggal data kategori & kelas berat. WAJIB berada dalam folder sama. -->
+<script src="kategori-config.js"></script>
 <script>
 /* ============================================================
-   DATA MODEL — selari dengan kategori-config.js
+   DATA MODEL — dimuat dari kategori-config.js (sumber tunggal)
+   KATEGORI, JANTINA, getKategori(), cariKategori(), resolveKelas()
+   disediakan oleh fail luaran tersebut. Pastikan ia dimuat dahulu.
    ============================================================ */
-const KATEGORI = [
-  { id:"terbuka",   nama:"Terbuka",    umurMin:17, umurMax:21, kelas:[
-    {kod:"U45",label:"U45 (<45 Kg)",min:0,max:45},{kod:"A",label:"A (45-50 Kg)",min:45,max:50},
-    {kod:"B",label:"B (50-55 Kg)",min:50,max:55},{kod:"C",label:"C (55-60 Kg)",min:55,max:60},
-    {kod:"D",label:"D (60-65 Kg)",min:60,max:65},{kod:"E",label:"E (65-70 Kg)",min:65,max:70},
-    {kod:"F",label:"F (70-75 Kg)",min:70,max:75},{kod:"G",label:"G (75-80 Kg)",min:75,max:80},
-    {kod:"BEBAS",label:"Bebas (80-90 Kg)",min:80,max:90,cap:true} ]},
-  { id:"remaja",    nama:"Remaja",     umurMin:15, umurMax:16, kelas:[
-    {kod:"U39",label:"U39 (<39 Kg)",min:0,max:39},{kod:"A",label:"A (39-44 Kg)",min:39,max:44},
-    {kod:"B",label:"B (44-49 Kg)",min:44,max:49},{kod:"C",label:"C (49-54 Kg)",min:49,max:54},
-    {kod:"D",label:"D (54-59 Kg)",min:54,max:59},{kod:"E",label:"E (59-64 Kg)",min:59,max:64},
-    {kod:"F",label:"F (64-69 Kg)",min:64,max:69},{kod:"G",label:"G (69-74 Kg)",min:69,max:74},
-    {kod:"BEBAS",label:"Bebas (80-90 Kg)",min:80,max:90,cap:true} ]},
-  { id:"praremaja", nama:"Pra Remaja", umurMin:13, umurMax:14, kelas:[
-    {kod:"A",label:"A (30-33 Kg)",min:30,max:33},{kod:"B",label:"B (33-36 Kg)",min:33,max:36},
-    {kod:"C",label:"C (36-39 Kg)",min:36,max:39},{kod:"D",label:"D (39-43 Kg)",min:39,max:43},
-    {kod:"E",label:"E (43-46 Kg)",min:43,max:46},{kod:"F",label:"F (46-49 Kg)",min:46,max:49},
-    {kod:"G",label:"G (49-53 Kg)",min:49,max:53},{kod:"BEBAS",label:"Bebas (58-65 Kg)",min:58,max:65,cap:true} ]},
-  { id:"dini",      nama:"Dini",       umurMin:11, umurMax:12, kelas:[
-    {kod:"A",label:"A (28-30 Kg)",min:28,max:30},{kod:"B",label:"B (30-32 Kg)",min:30,max:32},
-    {kod:"C",label:"C (32-34 Kg)",min:32,max:34},{kod:"D",label:"D (34-36 Kg)",min:34,max:36},
-    {kod:"E",label:"E (36-38 Kg)",min:36,max:38},{kod:"F",label:"F (38-40 Kg)",min:38,max:40},
-    {kod:"G",label:"G (40-42 Kg)",min:40,max:42},{kod:"BEBAS",label:"Bebas (50-55 Kg)",min:50,max:55,cap:true} ]},
-  { id:"pradini",   nama:"Pra Dini",   umurMin:9,  umurMax:10, kelas:[
-    {kod:"A",label:"A (20-22 Kg)",min:20,max:22},{kod:"B",label:"B (22-24 Kg)",min:22,max:24},
-    {kod:"C",label:"C (24-26 Kg)",min:24,max:26},{kod:"D",label:"D (26-28 Kg)",min:26,max:28},
-    {kod:"E",label:"E (28-30 Kg)",min:28,max:30},{kod:"F",label:"F (30-32 Kg)",min:30,max:32},
-    {kod:"G",label:"G (32-34 Kg)",min:32,max:34},{kod:"BEBAS",label:"Bebas (40-45 Kg)",min:40,max:45,cap:true} ]},
-  { id:"tunas",     nama:"Tunas",      umurMin:7,  umurMax:8,  kelas:[
-    {kod:"A-",label:"A- (<16 Kg)",min:0,max:16},{kod:"A",label:"A (17-19 Kg)",min:17,max:19},
-    {kod:"B",label:"B (20-22 Kg)",min:20,max:22},{kod:"C",label:"C (23-25 Kg)",min:23,max:25},
-    {kod:"D",label:"D (26-28 Kg)",min:26,max:28,cap:true} ]},
-  { id:"pratunas",  nama:"Pra Tunas",  umurMin:5,  umurMax:6,  kelas:[
-    {kod:"A",label:"A (12-14 Kg)",min:12,max:14},{kod:"B",label:"B (15-17 Kg)",min:15,max:17},
-    {kod:"C",label:"C (18-20 Kg)",min:18,max:20},{kod:"D",label:"D (21-23 Kg)",min:21,max:23,cap:true} ]},
-];
 
 const TAHUN_KEJOHANAN = 2026;
 const YURAN = 65;
+
+/* ============================================================
+   SAMBUNGAN BACKEND
+   Tampal "Web app URL" dari deployment Google Apps Script di sini.
+   Selagi placeholder ini kekal, borang berjalan dalam MOD DEMO
+   (tiada data dihantar — sesuai untuk pratonton).
+   ============================================================ */
+const GAS_URL = "PASTE_WEB_APP_URL_GAS_ANDA_DI_SINI";
+
+/* token unik bagi setiap sesi semakan — elak submit berganda */
+let submissionToken = null;
 
 /* ---------- Pembaca MyKad ---------- */
 function bacaMyKad(raw){
@@ -714,12 +727,7 @@ function bacaMyKad(raw){
   return { ok:true, mykadFmt:`${d.slice(0,6)}-${d.slice(6,8)}-${d.slice(8)}`, tahun, umur, jantina, tarikhLahir, digits:d };
 }
 
-function cariKategori(umur){
-  return KATEGORI.find(k => umur >= k.umurMin && umur <= k.umurMax) || null;
-}
-function resolveKelas(kat, berat){
-  return kat.kelas.find(kl => berat >= kl.min && (kl.cap ? berat <= kl.max : berat < kl.max)) || null;
-}
+/* cariKategori() & resolveKelas() disediakan oleh kategori-config.js */
 
 /* Cuba bina profil penuh dari input mentah */
 function bina(nama, mykadRaw, beratRaw){
@@ -931,6 +939,8 @@ $("btnSubmit").addEventListener("click", () => {
     })),
     dihantar: null   // diisi hanya selepas pengesahan
   };
+  submissionToken = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random();
+  payload.token = submissionToken;
   window.__payload = payload;
 
   renderReview(payload);
@@ -970,21 +980,63 @@ $("btnBack").addEventListener("click", () => {
   window.scrollTo({top:0,behavior:"smooth"});
 });
 
-/* Sahkan & hantar — muktamad */
-$("btnConfirm").addEventListener("click", () => {
+/* Sahkan & hantar — muktamad (hantar ke backend) */
+const confirmHtmlAsal = $("btnConfirm").innerHTML;
+function setHantarLoading(on){
+  $("btnConfirm").disabled = on;
+  $("btnBack").disabled = on;
+  $("btnConfirm").innerHTML = on
+    ? '<span class="spin"></span> Menghantar…'
+    : confirmHtmlAsal;
+}
+
+$("btnConfirm").addEventListener("click", async () => {
   const payload = window.__payload;
   payload.dihantar = new Date().toISOString();
+  payload.hp = $("hp_field").value;          // honeypot
 
-  // >>> SAMBUNGAN BACKEND (GAS) DI SINI — buat masa ini papar pengesahan
-  console.log("Payload pendaftaran (disahkan):", payload);
+  hideReviewErr();
 
+  // MOD DEMO — jika URL belum ditetapkan, terus ke skrin berjaya tanpa backend
+  if (!GAS_URL || GAS_URL.indexOf("PASTE_") === 0){
+    console.log("[MOD DEMO] Payload:", payload);
+    return paparBerjaya(null, payload);
+  }
+
+  setHantarLoading(true);
+  try {
+    const res = await fetch(GAS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },  // elak preflight CORS
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.ralat || "Penghantaran tidak berjaya.");
+    paparBerjaya(data.idPasukan, payload);
+  } catch (err) {
+    setHantarLoading(false);
+    showReviewErr("Maaf, penghantaran gagal: " + err.message + " Sila semak sambungan internet dan cuba lagi.");
+  }
+});
+
+function paparBerjaya(idPasukan, payload){
+  setHantarLoading(false);
   $("review").classList.remove("show");
-  const done = $("done"); done.classList.add("show");
+  $("done").classList.add("show");
+  if (idPasukan){
+    $("refId").textContent = idPasukan;
+    $("refWrap").hidden = false;
+  } else {
+    $("refWrap").hidden = true;
+  }
   $("doneMsg").textContent =
     `Pasukan ${payload.pasukan} berjaya didaftarkan dengan ${payload.jumlahPesilat} pesilat ` +
     `(yuran RM${payload.jumlahYuran}.00). Sila lengkapkan pembayaran dan hantar dokumen sokongan kepada urusetia.`;
   window.scrollTo({top:0,behavior:"smooth"});
-});
+}
+
+function showReviewErr(m){ const e=$("reviewErr"); $("reviewErrMsg").textContent=m; e.classList.add("show"); }
+function hideReviewErr(){ $("reviewErr").classList.remove("show"); }
 
 $("btnNew").addEventListener("click", () => location.reload());
 
